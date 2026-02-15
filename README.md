@@ -1,4 +1,4 @@
-# rails-smoke
+# Rails Smoke
 
 A/B smoke test gem upgrades using git worktrees. Creates a worktree with an updated gem, runs your smoke tests against both versions, and produces a comparison report with diffs and performance data.
 
