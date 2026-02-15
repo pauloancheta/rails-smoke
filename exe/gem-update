@@ -1,0 +1,19 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "gem/update"
+
+gem_name = ARGV[0]
+
+if gem_name.nil? || gem_name.empty?
+  warn "Usage: gem-update <gem_name>"
+  exit 1
+end
+
+unless system("git rev-parse --is-inside-work-tree > /dev/null 2>&1")
+  warn "Error: must be run inside a git repository"
+  exit 1
+end
+
+runner = Gem::Update::Runner.new(gem_name)
+runner.run
