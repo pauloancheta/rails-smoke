@@ -29,9 +29,9 @@ module Gem
           run_command("bundle", "exec", "rails", @config.setup_task, dir: directory, env: env, label: "setup_task")
         end
 
-        if @config.setup_script
-          run_command("bundle", "exec", "ruby", @config.setup_script, dir: directory, env: env, label: "setup_script")
-        end
+        return unless @config.setup_script
+
+        run_command("bundle", "exec", "ruby", @config.setup_script, dir: directory, env: env, label: "setup_script")
       end
 
       def cleanup(directory:, database_url:)
@@ -58,10 +58,10 @@ module Gem
         File.write(File.join(@log_dir, "#{label}_stdout.log"), stdout)
         File.write(File.join(@log_dir, "#{label}_stderr.log"), stderr)
 
-        unless status.success?
-          raise "Sandbox command failed: #{cmd.join(" ")} (exit #{status.exitstatus}). " \
-                "Check #{@log_dir}/#{label}_stderr.log"
-        end
+        return if status.success?
+
+        raise "Sandbox command failed: #{cmd.join(" ")} (exit #{status.exitstatus}). " \
+              "Check #{@log_dir}/#{label}_stderr.log"
       end
     end
   end

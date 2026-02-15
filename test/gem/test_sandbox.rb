@@ -4,7 +4,7 @@ require "test_helper"
 require "tmpdir"
 require "fileutils"
 
-class Gem::TestSandbox < Minitest::Test
+class Gem::TestSandbox < Minitest::Test # rubocop:disable Metrics/ClassLength
   def setup
     @tmpdir = Dir.mktmpdir("gem-update-sandbox-test")
     @log_dir = File.join(@tmpdir, "logs")
@@ -33,16 +33,12 @@ class Gem::TestSandbox < Minitest::Test
     sandbox = Gem::Update::Sandbox.new("rails", config: @config, log_dir: @log_dir)
     commands_run = []
 
-    capture3_stub = lambda do |env, *cmd, **opts|
-      commands_run << { env: env, cmd: cmd, opts: opts }
+    capture3_stub = lambda do |env, *cmd, **_opts|
+      commands_run << { env: env, cmd: cmd }
       ["", "", stub_success_status]
     end
 
-    Open3.stub(:capture3, capture3_stub) do
-      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-        sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url)
-      end
-    end
+    stub_sandbox(capture3_stub) { sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url) }
 
     assert_equal 2, commands_run.size
     assert_equal %w[bundle exec rails db:create], commands_run[0][:cmd]
@@ -60,16 +56,12 @@ class Gem::TestSandbox < Minitest::Test
     sandbox = Gem::Update::Sandbox.new("rails", config: config, log_dir: @log_dir)
     commands_run = []
 
-    capture3_stub = lambda do |env, *cmd, **opts|
-      commands_run << { env: env, cmd: cmd }
+    capture3_stub = lambda do |_env, *cmd, **_opts|
+      commands_run << { cmd: cmd }
       ["", "", stub_success_status]
     end
 
-    Open3.stub(:capture3, capture3_stub) do
-      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-        sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url)
-      end
-    end
+    stub_sandbox(capture3_stub) { sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url) }
 
     assert_equal 3, commands_run.size
     assert_equal %w[bundle exec rails db:seed], commands_run[2][:cmd]
@@ -80,16 +72,12 @@ class Gem::TestSandbox < Minitest::Test
     sandbox = Gem::Update::Sandbox.new("rails", config: config, log_dir: @log_dir)
     commands_run = []
 
-    capture3_stub = lambda do |env, *cmd, **opts|
-      commands_run << { env: env, cmd: cmd }
+    capture3_stub = lambda do |_env, *cmd, **_opts|
+      commands_run << { cmd: cmd }
       ["", "", stub_success_status]
     end
 
-    Open3.stub(:capture3, capture3_stub) do
-      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-        sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url)
-      end
-    end
+    stub_sandbox(capture3_stub) { sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url) }
 
     assert_equal 3, commands_run.size
     assert_equal ["bundle", "exec", "ruby", "test/smoke/seed.rb"], commands_run[2][:cmd]
@@ -100,16 +88,12 @@ class Gem::TestSandbox < Minitest::Test
     sandbox = Gem::Update::Sandbox.new("rails", config: config, log_dir: @log_dir)
     commands_run = []
 
-    capture3_stub = lambda do |env, *cmd, **opts|
+    capture3_stub = lambda do |_env, *cmd, **_opts|
       commands_run << { cmd: cmd }
       ["", "", stub_success_status]
     end
 
-    Open3.stub(:capture3, capture3_stub) do
-      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-        sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url)
-      end
-    end
+    stub_sandbox(capture3_stub) { sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url) }
 
     assert_equal 4, commands_run.size
     assert_equal %w[bundle exec rails db:create], commands_run[0][:cmd]
@@ -122,16 +106,12 @@ class Gem::TestSandbox < Minitest::Test
     sandbox = Gem::Update::Sandbox.new("rails", config: @config, log_dir: @log_dir)
     commands_run = []
 
-    capture3_stub = lambda do |env, *cmd, **opts|
+    capture3_stub = lambda do |env, *cmd, **_opts|
       commands_run << { env: env, cmd: cmd }
       ["", "", stub_success_status]
     end
 
-    Open3.stub(:capture3, capture3_stub) do
-      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-        sandbox.cleanup(directory: @tmpdir, database_url: sandbox.before_url)
-      end
-    end
+    stub_sandbox(capture3_stub) { sandbox.cleanup(directory: @tmpdir, database_url: sandbox.before_url) }
 
     assert_equal 1, commands_run.size
     assert_equal %w[bundle exec rails db:drop], commands_run[0][:cmd]
@@ -142,31 +122,23 @@ class Gem::TestSandbox < Minitest::Test
   def test_setup_raises_on_command_failure
     sandbox = Gem::Update::Sandbox.new("rails", config: @config, log_dir: @log_dir)
 
-    capture3_stub = lambda do |env, *cmd, **opts|
+    capture3_stub = lambda do |_env, *_cmd, **_opts|
       ["", "error output", stub_failure_status]
     end
 
     assert_raises(RuntimeError, /Sandbox command failed/) do
-      Open3.stub(:capture3, capture3_stub) do
-        Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-          sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url)
-        end
-      end
+      stub_sandbox(capture3_stub) { sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url) }
     end
   end
 
   def test_setup_logs_output
     sandbox = Gem::Update::Sandbox.new("rails", config: @config, log_dir: @log_dir)
 
-    capture3_stub = lambda do |env, *cmd, **opts|
+    capture3_stub = lambda do |_env, *_cmd, **_opts|
       ["stdout content", "stderr content", stub_success_status]
     end
 
-    Open3.stub(:capture3, capture3_stub) do
-      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }) do
-        sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url)
-      end
-    end
+    stub_sandbox(capture3_stub) { sandbox.setup(directory: @tmpdir, database_url: sandbox.before_url) }
 
     assert File.exist?(File.join(@log_dir, "db_create_stdout.log"))
     assert File.exist?(File.join(@log_dir, "db_create_stderr.log"))
@@ -175,14 +147,13 @@ class Gem::TestSandbox < Minitest::Test
 
   private
 
-  def build_config(setup_task: nil, setup_script: nil)
-    config = Minitest::Mock.new
-    config.expect(:database_url_base, "postgresql://localhost")
-    config.expect(:rails_env, "test")
-    config.expect(:setup_task, setup_task)
-    config.expect(:setup_script, setup_script)
+  def stub_sandbox(capture3_stub, &block)
+    Open3.stub(:capture3, capture3_stub) do
+      Bundler.stub(:with_unbundled_env, ->(&b) { b.call }, &block)
+    end
+  end
 
-    # Allow repeated calls
+  def build_config(setup_task: nil, setup_script: nil)
     stub = Object.new
     stub.define_singleton_method(:gem_name) { "rails" }
     stub.define_singleton_method(:rails_env) { "test" }
