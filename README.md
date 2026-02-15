@@ -94,11 +94,14 @@ When `server: true` is set for a gem:
 
 ### Smoke test environment variables
 
-When servers are enabled, your smoke test receives:
+Every smoke test receives these environment variables:
 
 | Variable | Description |
 |---|---|
-| `SERVER_PORT` | The port of the server this test should target |
+| `SERVER_PORT` | The port of the server this test should target (when `server: true`) |
+| `SMOKE_OUTPUT_DIR` | Directory where tests can write extra log files to be diffed |
+
+Any files written to `SMOKE_OUTPUT_DIR` are automatically diffed between the before and after runs and included in the report. This is useful for capturing browser console errors, screenshots, or any structured output.
 
 ```ruby
 # test/smoke/rails/response_check.rb
@@ -112,6 +115,47 @@ puts "Status: #{res.code}"
 puts res.body
 
 abort "Unexpected status #{res.code}" unless res.code == "200"
+```
+
+### Selenium tests
+
+Smoke tests are plain Ruby scripts, so you can use Selenium for browser-level A/B testing. Write browser console errors to `SMOKE_OUTPUT_DIR` and they'll be diffed automatically.
+
+```ruby
+# test/smoke/rails/browser_check.rb
+require "selenium-webdriver"
+
+port = ENV.fetch("SERVER_PORT")
+output_dir = ENV.fetch("SMOKE_OUTPUT_DIR")
+
+options = Selenium::WebDriver::Chrome::Options.new(args: ["--headless"])
+options.add_option("goog:loggingPrefs", { browser: "ALL" })
+driver = Selenium::WebDriver.for(:chrome, options: options)
+
+begin
+  driver.get("http://127.0.0.1:#{port}/")
+
+  # Capture browser console errors
+  logs = driver.manage.logs.get(:browser)
+  errors = logs.select { |entry| entry.level == "SEVERE" }
+
+  File.write(File.join(output_dir, "browser_errors.log"), errors.map(&:message).join("\n"))
+
+  abort "Browser errors detected: #{errors.size}" unless errors.empty?
+  puts "No browser errors"
+ensure
+  driver.quit
+end
+```
+
+The report will include a diff of `browser_errors.log` between the before and after runs:
+
+```
+## Browser errors Diff
+--- tmp/gem_updates/rails/before/smoke/browser_errors.log
++++ tmp/gem_updates/rails/after/smoke/browser_errors.log
+@@ -0,0 +1 @@
++Uncaught TypeError: Cannot read properties of undefined
 ```
 
 ### Example workflow
@@ -145,7 +189,119 @@ RUBY
 gem-update rails
 ```
 
-### Output
+### Example output
+
+With servers enabled:
+
+```
+$ gem-update rails
+
+== gem-update: rails ==
+
+1. Creating worktree...
+2. Running bundle update rails...
+   Starting puma servers...
+   Before server running on port 3000
+   After server running on port 3001
+3. Running smoke tests (before & after in parallel)...
+5. Generating report...
+============================================================
+gem-update report: rails
+============================================================
+
+## Timing
+  Before: 1.204s
+  After:  1.387s
+  Diff:   +0.183s
+
+## Exit Status
+  Before: OK
+  After:  OK
+
+## Stdout Diff
+  (no differences)
+
+## Stderr Diff
+  (no differences)
+
+## Gemfile.lock Diff
+--- /Users/you/myapp/Gemfile.lock
++++ /Users/you/myapp/tmp/gem_updates/rails/worktree/Gemfile.lock
+@@ -120,7 +120,7 @@
+     railties (= 7.1.3)
+-    rails (7.1.3)
++    rails (7.2.0)
+-    actioncable (7.1.3)
++    actioncable (7.2.0)
+
+Artifacts saved to: tmp/gem_updates/rails
+```
+
+Without servers (default):
+
+```
+$ gem-update nokogiri
+
+== gem-update: nokogiri ==
+
+1. Creating worktree...
+2. Running bundle update nokogiri...
+3. Running smoke tests (before)...
+4. Running smoke tests (after)...
+5. Generating report...
+============================================================
+gem-update report: nokogiri
+============================================================
+
+## Timing
+  Before: 0.532s
+  After:  0.548s
+  Diff:   +0.016s
+
+## Exit Status
+  Before: OK
+  After:  OK
+
+## Stdout Diff
+  (no differences)
+
+## Stderr Diff
+  (no differences)
+
+## Gemfile.lock Diff
+--- /Users/you/myapp/Gemfile.lock
++++ /Users/you/myapp/tmp/gem_updates/nokogiri/worktree/Gemfile.lock
+@@ -85,7 +85,7 @@
+-    nokogiri (1.15.4)
++    nokogiri (1.16.0)
+
+Artifacts saved to: tmp/gem_updates/nokogiri
+```
+
+When a regression is caught:
+
+```
+## Exit Status
+  Before: OK
+  After:  FAILED
+
+## Stdout Diff
+--- tmp/gem_updates/rails/before/stdout.log
++++ tmp/gem_updates/rails/after/stdout.log
+@@ -1,2 +1,2 @@
+-Status: 200
++Status: 500
+-Health check passed
++Health check failed
+
+## Stderr Diff
+--- tmp/gem_updates/rails/before/stderr.log
++++ tmp/gem_updates/rails/after/stderr.log
+@@ -0,0 +1 @@
++Failed: 500
+```
+
+### Artifacts
 
 Results are saved to `tmp/gem_updates/<gem_name>/`:
 
@@ -155,18 +311,32 @@ tmp/gem_updates/rails/
 │   ├── stdout.log
 │   ├── stderr.log
 │   ├── timing.txt
-│   ├── puma_stdout.log   # when server: true
-│   └── puma_stderr.log
+│   ├── smoke/                    # files written by tests via SMOKE_OUTPUT_DIR
+│   │   └── browser_errors.log
+│   ├── puma_stdout.log           # when server: true
+│   ├── puma_stderr.log
+│   └── puma.pid
 ├── after/
 │   ├── stdout.log
 │   ├── stderr.log
 │   ├── timing.txt
+│   ├── smoke/
+│   │   └── browser_errors.log
 │   ├── puma_stdout.log
-│   └── puma_stderr.log
+│   ├── puma_stderr.log
+│   └── puma.pid
 ├── bundle_update.log
 ├── gemfile_lock.diff
 └── report.txt
 ```
+
+### Server cleanup
+
+Puma servers are cleaned up automatically. You don't need to worry about orphaned processes:
+
+- **Normal exit or errors** — servers are always stopped via `begin/ensure`, even if smoke tests fail or raise exceptions.
+- **Ctrl-C / SIGTERM** — signal handlers catch interrupts and shut down both servers before exiting.
+- **Stale processes** — each server writes a `puma.pid` file to its log directory. If a previous run was killed ungracefully (e.g. `kill -9`), the next `gem-update` run detects the leftover pidfiles, terminates those processes, and removes the files before starting fresh.
 
 ## Development
 

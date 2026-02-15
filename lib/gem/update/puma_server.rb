@@ -11,6 +11,20 @@ module Gem
 
       attr_reader :port, :pid
 
+      def self.cleanup_stale(output_dir)
+        Dir.glob(File.join(output_dir, "**", "puma.pid")).each do |pidfile|
+          pid = File.read(pidfile).strip.to_i
+          next unless pid.positive?
+
+          Process.kill("TERM", pid)
+          Process.wait(pid)
+        rescue Errno::ESRCH, Errno::ECHILD
+          # Process already exited
+        ensure
+          FileUtils.rm_f(pidfile)
+        end
+      end
+
       def initialize(port:, log_dir:)
         @port = port
         @log_dir = log_dir
@@ -32,7 +46,11 @@ module Gem
           )
         end
 
+        write_pidfile
         wait_for_ready
+      rescue StandardError
+        stop
+        raise
       end
 
       def stop
@@ -43,6 +61,7 @@ module Gem
       rescue Errno::ESRCH, Errno::ECHILD
         # Process already exited
       ensure
+        remove_pidfile
         @pid = nil
       end
 
@@ -58,6 +77,19 @@ module Gem
         end
 
         raise "Puma server failed to start on port #{@port} within #{READY_TIMEOUT}s"
+      end
+
+      def pidfile_path
+        File.join(@log_dir, "puma.pid")
+      end
+
+      def write_pidfile
+        FileUtils.mkdir_p(@log_dir)
+        File.write(pidfile_path, @pid.to_s)
+      end
+
+      def remove_pidfile
+        FileUtils.rm_f(pidfile_path)
       end
 
       def port_open?

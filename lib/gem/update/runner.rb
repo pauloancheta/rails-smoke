@@ -47,6 +47,16 @@ module Gem
       def run_with_servers(worktree)
         before_server = PumaServer.new(port: @config.before_port, log_dir: File.join(@output_dir, "before"))
         after_server = PumaServer.new(port: @config.after_port, log_dir: File.join(@output_dir, "after"))
+        servers = [before_server, after_server]
+
+        previous_int = Signal.trap("INT") do
+          shutdown_servers(servers)
+          exit(1)
+        end
+        previous_term = Signal.trap("TERM") do
+          shutdown_servers(servers)
+          exit(1)
+        end
 
         begin
           puts "   Starting puma servers..."
@@ -71,8 +81,9 @@ module Gem
 
           [before_thread.value, after_thread.value]
         ensure
-          before_server.stop
-          after_server.stop
+          shutdown_servers(servers)
+          Signal.trap("INT", previous_int || "DEFAULT")
+          Signal.trap("TERM", previous_term || "DEFAULT")
         end
       end
 
@@ -88,8 +99,13 @@ module Gem
       end
 
       def setup_output_dir
+        PumaServer.cleanup_stale(@output_dir) if File.directory?(@output_dir)
         FileUtils.rm_rf(@output_dir)
         FileUtils.mkdir_p(@output_dir)
+      end
+
+      def shutdown_servers(servers)
+        servers.each(&:stop)
       end
 
       def cleanup(worktree)

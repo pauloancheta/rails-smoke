@@ -34,10 +34,14 @@ module Gem
         all_success = true
         start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
+        smoke_output_dir = File.join(output_dir, "smoke")
+        FileUtils.mkdir_p(smoke_output_dir)
+        run_env = env.merge("SMOKE_OUTPUT_DIR" => File.expand_path(smoke_output_dir))
+
         files.each do |file|
           abs_file = File.expand_path(file, Dir.pwd)
           stdout, stderr, status = Open3.capture3(
-            env,
+            run_env,
             "bundle", "exec", "ruby", abs_file,
             chdir: directory
           )
