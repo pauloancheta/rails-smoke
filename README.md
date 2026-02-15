@@ -43,15 +43,19 @@ For example, to test a `rails` upgrade:
 
 ```ruby
 # test/smoke/rails.rb
+require "yaml"
 require "net/http"
 
-res = Net::HTTP.get_response(URI("http://127.0.0.1:#{ENV["SERVER_PORT"]}/health"))
+config = YAML.safe_load_file(ARGV[0])
+port = config.fetch("server_port")
+
+res = Net::HTTP.get_response(URI("http://127.0.0.1:#{port}/health"))
 abort "Health check failed: #{res.code}" unless res.code == "200"
 
 puts "Health check passed"
 ```
 
-Without the server option, smoke tests run via `bundle exec ruby <file>` in each directory (original and worktree). They should exit 0 on success and non-zero on failure.
+Smoke tests run via `bundle exec ruby <file> <config_path>` and receive a runtime YAML config as `ARGV[0]`. They should exit 0 on success and non-zero on failure.
 
 ## A/B server testing
 
@@ -69,6 +73,7 @@ defaults:
 
 rails:
   server: true
+  version: "7.2.0"
   before_port: 4000
   after_port: 4001
 ```
@@ -79,8 +84,11 @@ rails:
 | Key | Default | Description |
 |---|---|---|
 | `server` | `false` | Start puma servers for A/B testing |
+| `version` | *(latest)* | Target version to update to (e.g. `"7.2.0"`) |
 | `before_port` | `3000` | Port for the original (pre-update) server |
 | `after_port` | `3001` | Port for the updated (post-update) server |
+
+When `version` is set, the Gemfile in the worktree is pinned to that exact version before running `bundle update`. The before server always runs the current version while the after server runs the specified version. Without `version`, `bundle update` resolves to the latest allowed by your Gemfile constraints.
 
 ### How it works
 
@@ -92,22 +100,27 @@ When `server: true` is set for a gem:
 4. Results are logged separately and diffed after both complete
 5. Servers are shut down automatically (even on error)
 
-### Smoke test environment variables
+### Smoke test config file
 
-Every smoke test receives these environment variables:
+Each smoke test receives a runtime config YAML path as `ARGV[0]`. No environment variables are used — all configuration comes from the YAML file.
 
-| Variable | Description |
+The config file contains:
+
+| Key | Description |
 |---|---|
-| `SERVER_PORT` | The port of the server this test should target (when `server: true`) |
-| `SMOKE_OUTPUT_DIR` | Directory where tests can write extra log files to be diffed |
+| `gem_name` | The gem being tested |
+| `server_port` | The port of the server this test should target (only present when `server: true`) |
+| `output_dir` | Directory where tests can write extra log files to be diffed |
 
-Any files written to `SMOKE_OUTPUT_DIR` are automatically diffed between the before and after runs and included in the report. This is useful for capturing browser console errors, screenshots, or any structured output.
+Any files written to `output_dir` are automatically diffed between the before and after runs and included in the report. This is useful for capturing browser console errors, screenshots, or any structured output.
 
 ```ruby
 # test/smoke/rails/response_check.rb
+require "yaml"
 require "net/http"
 
-port = ENV.fetch("SERVER_PORT")
+config = YAML.safe_load_file(ARGV[0])
+port = config.fetch("server_port")
 uri = URI("http://127.0.0.1:#{port}/api/status")
 
 res = Net::HTTP.get_response(uri)
@@ -119,14 +132,16 @@ abort "Unexpected status #{res.code}" unless res.code == "200"
 
 ### Selenium tests
 
-Smoke tests are plain Ruby scripts, so you can use Selenium for browser-level A/B testing. Write browser console errors to `SMOKE_OUTPUT_DIR` and they'll be diffed automatically.
+Smoke tests are plain Ruby scripts, so you can use Selenium for browser-level A/B testing. Write browser console errors to the config's `output_dir` and they'll be diffed automatically.
 
 ```ruby
 # test/smoke/rails/browser_check.rb
+require "yaml"
 require "selenium-webdriver"
 
-port = ENV.fetch("SERVER_PORT")
-output_dir = ENV.fetch("SMOKE_OUTPUT_DIR")
+config = YAML.safe_load_file(ARGV[0])
+port = config.fetch("server_port")
+output_dir = config.fetch("output_dir")
 
 options = Selenium::WebDriver::Chrome::Options.new(args: ["--headless"])
 options.add_option("goog:loggingPrefs", { browser: "ALL" })
@@ -178,8 +193,10 @@ EOF
 # 3. Write a smoke test
 mkdir -p test/smoke
 cat > test/smoke/rails.rb << 'RUBY'
+require "yaml"
 require "net/http"
-port = ENV.fetch("SERVER_PORT", "3000")
+config = YAML.safe_load_file(ARGV[0])
+port = config.fetch("server_port")
 res = Net::HTTP.get_response(URI("http://127.0.0.1:#{port}/health"))
 abort "Failed: #{res.code}" unless res.code == "200"
 puts "OK"
@@ -311,15 +328,17 @@ tmp/gem_updates/rails/
 │   ├── stdout.log
 │   ├── stderr.log
 │   ├── timing.txt
-│   ├── smoke/                    # files written by tests via SMOKE_OUTPUT_DIR
+│   ├── smoke_config.yml            # runtime config passed to smoke tests
+│   ├── smoke/                      # files written by tests via output_dir
 │   │   └── browser_errors.log
-│   ├── puma_stdout.log           # when server: true
+│   ├── puma_stdout.log             # when server: true
 │   ├── puma_stderr.log
 │   └── puma.pid
 ├── after/
 │   ├── stdout.log
 │   ├── stderr.log
 │   ├── timing.txt
+│   ├── smoke_config.yml
 │   ├── smoke/
 │   │   └── browser_errors.log
 │   ├── puma_stdout.log

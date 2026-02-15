@@ -58,22 +58,58 @@ class Gem::TestSmokeTest < Minitest::Test
     assert_match(/No smoke tests found/, result.stderr)
   end
 
-  def test_run_passes_env_to_subprocess
+  def test_run_writes_runtime_config_with_server_port
     FileUtils.mkdir_p("test/smoke")
-    File.write("test/smoke/myapp.rb", 'puts "PORT=#{ENV["SERVER_PORT"]}"')
+    File.write("test/smoke/myapp.rb", <<~'RUBY')
+      require "yaml"
+      config = YAML.safe_load_file(ARGV[0])
+      puts "PORT=#{config["server_port"]}"
+    RUBY
 
-    # Create minimal Gemfile so bundle exec works
     File.write("Gemfile", 'source "https://rubygems.org"')
     system("bundle", "install", "--quiet", out: File::NULL, err: File::NULL)
 
     output_dir = File.join(@tmpdir, "output")
     smoke = Gem::Update::SmokeTest.new("myapp")
-    result = smoke.run(
-      directory: @tmpdir,
-      output_dir: output_dir,
-      env: { "SERVER_PORT" => "4000" }
-    )
+    result = smoke.run(directory: @tmpdir, output_dir: output_dir, server_port: 4000)
 
     assert_match(/PORT=4000/, result.stdout)
+  end
+
+  def test_run_writes_runtime_config_with_output_dir
+    FileUtils.mkdir_p("test/smoke")
+    File.write("test/smoke/myapp.rb", <<~RUBY)
+      require "yaml"
+      config = YAML.safe_load_file(ARGV[0])
+      File.write(File.join(config["output_dir"], "test.log"), "logged")
+    RUBY
+
+    File.write("Gemfile", 'source "https://rubygems.org"')
+    system("bundle", "install", "--quiet", out: File::NULL, err: File::NULL)
+
+    output_dir = File.join(@tmpdir, "output")
+    smoke = Gem::Update::SmokeTest.new("myapp")
+    smoke.run(directory: @tmpdir, output_dir: output_dir)
+
+    assert File.exist?(File.join(output_dir, "smoke", "test.log"))
+    assert_equal "logged", File.read(File.join(output_dir, "smoke", "test.log"))
+  end
+
+  def test_runtime_config_omits_server_port_when_nil
+    FileUtils.mkdir_p("test/smoke")
+    File.write("test/smoke/myapp.rb", <<~'RUBY')
+      require "yaml"
+      config = YAML.safe_load_file(ARGV[0])
+      puts "has_port=#{config.key?("server_port")}"
+    RUBY
+
+    File.write("Gemfile", 'source "https://rubygems.org"')
+    system("bundle", "install", "--quiet", out: File::NULL, err: File::NULL)
+
+    output_dir = File.join(@tmpdir, "output")
+    smoke = Gem::Update::SmokeTest.new("myapp")
+    result = smoke.run(directory: @tmpdir, output_dir: output_dir)
+
+    assert_match(/has_port=false/, result.stdout)
   end
 end

@@ -70,6 +70,22 @@ class Gem::TestConfig < Minitest::Test
     assert_equal 3001, config.after_port
   end
 
+  def test_version_from_gem_override
+    write_config(
+      "rails" => { "version" => "7.2.0" }
+    )
+
+    config = Gem::Update::Config.new("rails", project_root: @tmpdir)
+
+    assert_equal "7.2.0", config.version
+  end
+
+  def test_version_defaults_to_nil
+    config = Gem::Update::Config.new("rails", project_root: @tmpdir)
+
+    assert_nil config.version
+  end
+
   def test_empty_yaml_file
     File.write(File.join(@tmpdir, ".gem_update.yml"), "")
 

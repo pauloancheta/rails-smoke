@@ -28,6 +28,10 @@ module Gem
         @settings["after_port"]
       end
 
+      def version
+        @settings["version"]
+      end
+
       private
 
       def load_settings(project_root)

@@ -5,13 +5,16 @@ require "open3"
 module Gem
   module Update
     class GemUpdater
-      def initialize(gem_name, worktree_path:, output_dir:)
+      def initialize(gem_name, worktree_path:, output_dir:, version: nil)
         @gem_name = gem_name
         @worktree_path = worktree_path
         @output_dir = output_dir
+        @version = version
       end
 
       def run
+        pin_version if @version
+
         stdout, stderr, status = Open3.capture3(
           "bundle", "update", @gem_name,
           chdir: @worktree_path
@@ -26,6 +29,20 @@ module Gem
       end
 
       private
+
+      def pin_version
+        gemfile_path = File.join(@worktree_path, "Gemfile")
+        content = File.read(gemfile_path)
+        gem_pattern = /^(\s*gem\s+["']#{Regexp.escape(@gem_name)}["'])(.*)$/
+
+        updated = if content.match?(gem_pattern)
+                    content.gsub(gem_pattern, "\\1, \"#{@version}\"")
+                  else
+                    content + "\ngem \"#{@gem_name}\", \"#{@version}\"\n"
+                  end
+
+        File.write(gemfile_path, updated)
+      end
 
       def generate_diff
         original_lock = File.join(Dir.pwd, "Gemfile.lock")

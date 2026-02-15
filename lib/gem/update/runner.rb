@@ -21,8 +21,10 @@ module Gem
         worktree = Worktree.new(@gem_name, base_dir: @output_dir)
         worktree.create
 
-        puts "2. Running bundle update #{@gem_name}..."
-        updater = GemUpdater.new(@gem_name, worktree_path: worktree.path, output_dir: @output_dir)
+        version_label = @config.version ? " to #{@config.version}" : ""
+        puts "2. Running bundle update #{@gem_name}#{version_label}..."
+        updater = GemUpdater.new(@gem_name, worktree_path: worktree.path, output_dir: @output_dir,
+                                            version: @config.version)
         unless updater.run
           warn "bundle update #{@gem_name} failed. Check #{@output_dir}/bundle_update.log"
           cleanup(worktree)
@@ -68,15 +70,21 @@ module Gem
 
           puts "3. Running smoke tests (before & after in parallel)..."
           smoke = SmokeTest.new(@gem_name)
-          before_env = { "SERVER_PORT" => @config.before_port.to_s }
-          after_env = { "SERVER_PORT" => @config.after_port.to_s }
 
           before_thread = Thread.new do
-            smoke.run(directory: Dir.pwd, output_dir: File.join(@output_dir, "before"), env: before_env)
+            smoke.run(
+              directory: Dir.pwd,
+              output_dir: File.join(@output_dir, "before"),
+              server_port: @config.before_port
+            )
           end
 
           after_thread = Thread.new do
-            smoke.run(directory: worktree.path, output_dir: File.join(@output_dir, "after"), env: after_env)
+            smoke.run(
+              directory: worktree.path,
+              output_dir: File.join(@output_dir, "after"),
+              server_port: @config.after_port
+            )
           end
 
           [before_thread.value, after_thread.value]
