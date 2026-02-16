@@ -29,7 +29,7 @@ module RailsSmoke
       # Use throwaway sandbox databases
       # sandbox: true
 
-      # Base URL for sandbox databases
+      # Base URL for sandbox databases (auto-detected from config/database.yml)
       # database_url_base: "postgresql://localhost"
 
       # Rake task to run after schema load
