@@ -50,6 +50,8 @@ module RailsSmoke
       puts "5. Generating report..."
       report = Report.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
       report.generate
+      html_report = HtmlReport.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
+      html_report.generate
 
       cleanup(worktree)
     end
@@ -73,6 +75,8 @@ module RailsSmoke
       puts "5. Generating report..."
       report = Report.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
       report.generate
+      html_report = HtmlReport.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
+      html_report.generate
 
       cleanup(before_worktree, after_worktree)
     end
