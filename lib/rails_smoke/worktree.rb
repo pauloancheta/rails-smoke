@@ -14,7 +14,7 @@ module RailsSmoke
 
     def create(ref: "HEAD")
       FileUtils.mkdir_p(File.dirname(@path))
-      out, status = Open3.capture2e("git", "worktree", "add", "--detach", @path, ref)
+      out, status = Open3.capture2e("git", "worktree", "add", "--detach", "--force", @path, ref)
       return if status.success?
 
       raise "Failed to create git worktree at #{@path} for ref '#{ref}': #{out.strip}"

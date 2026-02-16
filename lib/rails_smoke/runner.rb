@@ -56,19 +56,17 @@ module RailsSmoke
     end
 
     def run_branch_mode
-      puts "1. Creating worktrees..."
-      before_worktree = Worktree.new(@identifier, base_dir: @output_dir, suffix: "before_worktree")
-      after_worktree = Worktree.new(@identifier, base_dir: @output_dir, suffix: "after_worktree")
-      before_worktree.create(ref: @config.before_branch)
-      after_worktree.create(ref: @config.after_branch)
+      puts "1. Creating worktree for #{@config.before_branch}..."
+      worktree = Worktree.new(@identifier, base_dir: @output_dir, suffix: "before_worktree")
+      worktree.create(ref: @config.before_branch)
 
       puts "2. Generating Gemfile.lock diff..."
-      generate_lock_diff(before_worktree.path, after_worktree.path)
+      generate_lock_diff(worktree.path, Dir.pwd)
 
       before_result, after_result = if @config.server?
-                                      run_branch_with_servers(before_worktree, after_worktree)
+                                      run_branch_with_servers(worktree)
                                     else
-                                      run_branch_without_servers(before_worktree, after_worktree)
+                                      run_branch_without_servers(worktree)
                                     end
 
       puts "5. Generating report..."
@@ -77,11 +75,11 @@ module RailsSmoke
       html_report = HtmlReport.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
       html_report.generate
     ensure
-      cleanup(*[before_worktree, after_worktree].compact)
+      cleanup(worktree) if worktree
     end
 
-    def run_branch_with_servers(before_worktree, after_worktree)
-      sandbox, before_env, after_env = setup_branch_sandbox(before_worktree, after_worktree)
+    def run_branch_with_servers(worktree)
+      sandbox, before_env, after_env = setup_branch_sandbox(worktree)
 
       before_server = PumaServer.new(port: @config.before_port, log_dir: File.join(@output_dir, "before"),
                                      env: before_env)
@@ -91,19 +89,19 @@ module RailsSmoke
 
       with_signal_handlers(servers) do
         puts "   Starting puma servers..."
-        before_server.start(directory: before_worktree.path)
+        before_server.start(directory: worktree.path)
         puts "   Before server running on port #{@config.before_port} (#{@config.rails_env})"
-        after_server.start(directory: after_worktree.path)
+        after_server.start(directory: Dir.pwd)
         puts "   After server running on port #{@config.after_port} (#{@config.rails_env})"
 
-        run_branch_smoke_tests_parallel(before_worktree, after_worktree)
+        run_branch_smoke_tests_parallel(worktree)
       ensure
         shutdown_servers(servers)
-        cleanup_branch_sandbox(sandbox, before_worktree, after_worktree)
+        cleanup_branch_sandbox(sandbox, worktree)
       end
     end
 
-    def setup_branch_sandbox(before_worktree, after_worktree)
+    def setup_branch_sandbox(worktree)
       before_env = { "RAILS_ENV" => @config.rails_env, "RACK_ENV" => @config.rails_env }
       after_env = { "RAILS_ENV" => @config.rails_env, "RACK_ENV" => @config.rails_env }
       sandbox = nil
@@ -111,8 +109,8 @@ module RailsSmoke
       if @config.sandbox?
         sandbox = Sandbox.new(@identifier, config: @config, log_dir: File.join(@output_dir, "sandbox"))
         puts "   Setting up sandbox databases..."
-        sandbox.setup(directory: before_worktree.path, database_url: sandbox.before_url)
-        sandbox.setup(directory: after_worktree.path, database_url: sandbox.after_url)
+        sandbox.setup(directory: worktree.path, database_url: sandbox.before_url)
+        sandbox.setup(directory: Dir.pwd, database_url: sandbox.after_url)
         before_env["DATABASE_URL"] = sandbox.before_url
         after_env["DATABASE_URL"] = sandbox.after_url
       end
@@ -120,37 +118,37 @@ module RailsSmoke
       [sandbox, before_env, after_env]
     end
 
-    def run_branch_smoke_tests_parallel(before_worktree, after_worktree)
+    def run_branch_smoke_tests_parallel(worktree)
       puts "3. Running smoke tests (before & after in parallel)..."
       smoke = SmokeTest.new(@identifier)
 
       before_thread = Thread.new do
-        smoke.run(directory: before_worktree.path, output_dir: File.join(@output_dir, "before"),
+        smoke.run(directory: worktree.path, output_dir: File.join(@output_dir, "before"),
                   server_port: @config.before_port)
       end
       after_thread = Thread.new do
-        smoke.run(directory: after_worktree.path, output_dir: File.join(@output_dir, "after"),
+        smoke.run(directory: Dir.pwd, output_dir: File.join(@output_dir, "after"),
                   server_port: @config.after_port)
       end
 
       [before_thread.value, after_thread.value]
     end
 
-    def cleanup_branch_sandbox(sandbox, before_worktree, after_worktree)
+    def cleanup_branch_sandbox(sandbox, worktree)
       return unless sandbox
 
       puts "   Cleaning up sandbox databases..."
-      sandbox.cleanup(directory: before_worktree.path, database_url: sandbox.before_url)
-      sandbox.cleanup(directory: after_worktree.path, database_url: sandbox.after_url)
+      sandbox.cleanup(directory: worktree.path, database_url: sandbox.before_url)
+      sandbox.cleanup(directory: Dir.pwd, database_url: sandbox.after_url)
     end
 
-    def run_branch_without_servers(before_worktree, after_worktree)
+    def run_branch_without_servers(worktree)
       puts "3. Running smoke tests (before)..."
       smoke = SmokeTest.new(@identifier)
-      before_result = smoke.run(directory: before_worktree.path, output_dir: File.join(@output_dir, "before"))
+      before_result = smoke.run(directory: worktree.path, output_dir: File.join(@output_dir, "before"))
 
       puts "4. Running smoke tests (after)..."
-      after_result = smoke.run(directory: after_worktree.path, output_dir: File.join(@output_dir, "after"))
+      after_result = smoke.run(directory: Dir.pwd, output_dir: File.join(@output_dir, "after"))
 
       [before_result, after_result]
     end
