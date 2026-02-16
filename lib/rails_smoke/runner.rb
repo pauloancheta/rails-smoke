@@ -60,7 +60,10 @@ module RailsSmoke
       worktree = Worktree.new(@identifier, base_dir: @output_dir, suffix: "before_worktree")
       worktree.create(ref: @config.before_branch)
 
-      puts "2. Generating Gemfile.lock diff..."
+      puts "2. Running bundle install in worktree..."
+      bundle_install(worktree.path)
+
+      puts "3. Generating Gemfile.lock diff..."
       generate_lock_diff(worktree.path, Dir.pwd)
 
       before_result, after_result = if @config.server?
@@ -69,7 +72,7 @@ module RailsSmoke
                                       run_branch_without_servers(worktree)
                                     end
 
-      puts "5. Generating report..."
+      puts "6. Generating report..."
       report = Report.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
       report.generate
       html_report = HtmlReport.new(@identifier, before: before_result, after: after_result, output_dir: @output_dir)
@@ -143,14 +146,28 @@ module RailsSmoke
     end
 
     def run_branch_without_servers(worktree)
-      puts "3. Running smoke tests (before)..."
+      puts "4. Running smoke tests (before)..."
       smoke = SmokeTest.new(@identifier)
       before_result = smoke.run(directory: worktree.path, output_dir: File.join(@output_dir, "before"))
 
-      puts "4. Running smoke tests (after)..."
+      puts "5. Running smoke tests (after)..."
       after_result = smoke.run(directory: Dir.pwd, output_dir: File.join(@output_dir, "after"))
 
       [before_result, after_result]
+    end
+
+    def bundle_install(directory)
+      stdout, stderr, status = Bundler.with_unbundled_env do
+        Open3.capture3("bundle", "install", chdir: directory)
+      end
+
+      log = "$ bundle install\n\n#{stdout}\n#{stderr}"
+      File.write(File.join(@output_dir, "bundle_install.log"), log)
+
+      return if status.success?
+
+      warn "bundle install failed in worktree. Check #{@output_dir}/bundle_install.log"
+      exit 1
     end
 
     def generate_lock_diff(before_dir, after_dir)
