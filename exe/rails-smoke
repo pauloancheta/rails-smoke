@@ -18,6 +18,11 @@ begin
   config = RailsSmoke::Config.new
   runner = RailsSmoke::Runner.new(config: config)
   runner.run
+
+  unless runner.success?
+    warn "FAILED: after tests did not pass"
+    exit 1
+  end
 rescue RailsSmoke::Error => e
   warn "Error: #{e.message}"
   exit 1

@@ -327,6 +327,7 @@ $ rails-smoke
 
   View text report:  cat rails_smoke_artifacts/report.txt
   View HTML report:  open rails_smoke_artifacts/report.html
+  View JSON report:  cat rails_smoke_artifacts/report.json
 ```
 
 Without servers (default):
@@ -345,7 +346,46 @@ $ rails-smoke
 
   View text report:  cat rails_smoke_artifacts/report.txt
   View HTML report:  open rails_smoke_artifacts/report.html
+  View JSON report:  cat rails_smoke_artifacts/report.json
 ```
+
+### CI usage
+
+rails-smoke exits with code **1** when the "after" tests fail, making it easy to use as a CI gate:
+
+```sh
+rails-smoke || exit 1
+```
+
+Exit codes:
+- **0** — after tests passed (upgrade is safe)
+- **1** — after tests failed (upgrade broke something)
+
+A JSON report is generated at `rails_smoke_artifacts/report.json` for programmatic consumption:
+
+```json
+{
+  "version": "1.0",
+  "identifier": "rails",
+  "generated_at": "2026-02-16T12:00:00Z",
+  "result": "pass",
+  "before": { "success": true, "elapsed": 1.234 },
+  "after": { "success": true, "elapsed": 2.567 },
+  "diffs": {
+    "stdout": null,
+    "stderr": null,
+    "gemfile_lock": "--- a/Gemfile.lock\n+++ ..."
+  }
+}
+```
+
+The `result` field summarizes the outcome:
+- `"pass"` — both before and after succeeded
+- `"regression"` — before passed but after failed
+- `"baseline_broken"` — both before and after failed
+- `"fail"` — after failed (before also failed)
+
+Diff values are `null` when there are no differences, or a unified diff string when present.
 
 ### Artifacts
 
@@ -384,7 +424,8 @@ rails_smoke_artifacts/
 ├── bundle_install.log              # branch mode
 ├── gemfile_lock.diff
 ├── report.txt
-└── report.html
+├── report.html
+└── report.json
 ```
 
 Worktrees are created in `tmp/rails_smoke/` and cleaned up automatically after each run.

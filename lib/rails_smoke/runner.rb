@@ -25,6 +25,10 @@ module RailsSmoke
       end
     end
 
+    def success?
+      @success
+    end
+
     private
 
     def run_gem_mode
@@ -47,7 +51,7 @@ module RailsSmoke
                                       run_without_servers(worktree)
                                     end
 
-      generate_reports(before_result, after_result)
+      @success = generate_reports(before_result, after_result)
     ensure
       cleanup(worktree) if worktree
     end
@@ -69,7 +73,7 @@ module RailsSmoke
                                       run_branch_without_servers(worktree)
                                     end
 
-      generate_reports(before_result, after_result)
+      @success = generate_reports(before_result, after_result)
     ensure
       cleanup(worktree) if worktree
     end
@@ -154,13 +158,18 @@ module RailsSmoke
       report_path = report.generate
       html_report = HtmlReport.new(@identifier, before: before_result, after: after_result, output_dir: @artifacts_dir)
       html_path = html_report.generate
+      json_report = JsonReport.new(@identifier, before: before_result, after: after_result, output_dir: @artifacts_dir)
+      json_path = json_report.generate
 
       puts ""
       puts "== Done! =="
       puts ""
       puts "  View text report:  cat #{report_path}"
       puts "  View HTML report:  open #{html_path}"
+      puts "  View JSON report:  cat #{json_path}"
       puts ""
+
+      after_result.success
     end
 
     def bundle_install(directory)

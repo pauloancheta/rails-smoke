@@ -10,6 +10,7 @@ require_relative "rails_smoke/sandbox"
 require_relative "rails_smoke/diff_helpers"
 require_relative "rails_smoke/report"
 require_relative "rails_smoke/html_report"
+require_relative "rails_smoke/json_report"
 require_relative "rails_smoke/initializer"
 require_relative "rails_smoke/runner"
 
