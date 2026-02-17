@@ -160,8 +160,12 @@ probes:
 | `app_internals` | Boots the Rails app and discovers all `ActiveJob::Base` and `ActionMailer::Base` descendants. Detects missing job/mailer classes and renamed actions after upgrades. |
 | `rake_tasks` | Runs `bundle exec rails -T` and captures the full task list. Detects renamed or removed rake tasks. |
 | `routes` | Runs `bundle exec rails routes` and captures the route table. Detects removed actions, renamed paths, and route changes. |
+| `native_gems` | Lists gems with native C extensions and their linked shared libraries (`otool -L` / `ldd`). Detects shared library mismatches and missing system packages after OS upgrades. |
+| `system_deps` | Captures versions of common system binaries (`ruby`, `node`, `psql`, `openssl`, etc.). Detects missing or incompatible tools after infra changes. |
+| `ruby_warnings` | Boots the app with `-W:deprecated` and captures Ruby deprecation warnings. Detects new deprecations introduced by Ruby version changes. |
+| `ssl_certs` | Checks OpenSSL version, certificate store, and TLS connectivity. Detects TLS breakage after OS upgrades. |
 
-Probe output files (`probe_boot.txt`, `probe_eager_load.txt`, `probe_jobs.txt`, `probe_mailers.txt`, `probe_rake_tasks.txt`, `probe_routes.txt`) are written to the same `smoke/` output directory as smoke tests, so they appear as diff sections in the report automatically.
+Probe output files (`probe_boot.txt`, `probe_eager_load.txt`, `probe_jobs.txt`, `probe_mailers.txt`, `probe_rake_tasks.txt`, `probe_routes.txt`, `probe_native_extensions.txt`, `probe_shared_libs.txt`, `probe_system_deps.txt`, `probe_ruby_warnings.txt`, `probe_ssl_certs.txt`) are written to the same `smoke/` output directory as smoke tests, so they appear as diff sections in the report automatically.
 
 ### Sandbox mode
 
