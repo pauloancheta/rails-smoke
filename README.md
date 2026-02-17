@@ -76,6 +76,17 @@ puts "Health check passed"
 
 Smoke tests run via `bundle exec ruby <file> <config_path>` and receive a runtime YAML config as `ARGV[0]`. They should exit 0 on success and non-zero on failure.
 
+### Using an existing test suite
+
+If you already have a test suite that covers the important paths, you can use `test_command` instead of writing custom smoke tests:
+
+```yaml
+gem_name: rails
+test_command: "bundle exec rspec"
+```
+
+When `test_command` is set, it runs the specified command in each version's directory instead of discovering files in `test/smoke/`. The command runs inside a clean Bundler environment so it uses each version's own bundle.
+
 ## A/B server testing
 
 For gems that affect a running Rails app (e.g. `rails`, `puma`, `rack`), you can start puma servers against both versions and run smoke tests that make HTTP requests.
@@ -118,6 +129,7 @@ sandbox: true
 | `database_url_base` | *(auto-detected)* | Base URL for throwaway DBs (e.g. `postgresql://localhost`). Auto-detected from `config/database.yml` if not set. |
 | `setup_task` | `nil` | Rake task to run after schema load (e.g. `db:seed`, `db:fixtures:load`) |
 | `setup_script` | `nil` | Ruby script to run after setup_task (e.g. `test/smoke/seed.rb`) |
+| `test_command` | `nil` | Run an existing test command instead of manual smoke tests (e.g. `bundle exec rspec`) |
 
 ### Sandbox mode
 

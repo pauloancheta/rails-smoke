@@ -53,6 +53,24 @@ module RailsSmoke
       Result.new(stdout: all_stdout, stderr: all_stderr, elapsed: elapsed, success: all_success)
     end
 
+    def run_command(command:, directory:, output_dir:)
+      FileUtils.mkdir_p(output_dir)
+
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
+      stdout, stderr, status = Bundler.with_unbundled_env do
+        Open3.capture3(command, chdir: directory)
+      end
+
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start
+
+      File.write(File.join(output_dir, "stdout.log"), stdout)
+      File.write(File.join(output_dir, "stderr.log"), stderr)
+      File.write(File.join(output_dir, "timing.txt"), format("%.3fs", elapsed))
+
+      Result.new(stdout: stdout, stderr: stderr, elapsed: elapsed, success: status.success?)
+    end
+
     private
 
     def write_runtime_config(output_dir, server_port, smoke_output_dir)

@@ -63,6 +63,15 @@ class RailsSmoke::TestConfig < Minitest::Test # rubocop:disable Metrics/ClassLen
     assert_nil config.setup_task
     assert_nil config.setup_script
     assert_nil config.database_url_base
+    assert_nil config.test_command
+  end
+
+  def test_test_command_can_be_set
+    write_config("gem_name" => "rails", "test_command" => "bundle exec rspec")
+
+    config = RailsSmoke::Config.new(project_root: @tmpdir)
+
+    assert_equal "bundle exec rspec", config.test_command
   end
 
   def test_overrides_defaults

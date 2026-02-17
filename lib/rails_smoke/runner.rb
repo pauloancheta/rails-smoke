@@ -119,11 +119,11 @@ module RailsSmoke
       smoke = SmokeTest.new(@identifier)
 
       before_thread = Thread.new do
-        smoke.run(directory: worktree.path, output_dir: File.join(@artifacts_dir, "before"),
+        run_smoke(smoke, directory: worktree.path, output_dir: File.join(@artifacts_dir, "before"),
                   server_port: @config.before_port)
       end
       after_thread = Thread.new do
-        smoke.run(directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "after"),
+        run_smoke(smoke, directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "after"),
                   server_port: @config.after_port)
       end
 
@@ -141,10 +141,10 @@ module RailsSmoke
     def run_branch_without_servers(worktree)
       puts "4. Running smoke tests (before)..."
       smoke = SmokeTest.new(@identifier)
-      before_result = smoke.run(directory: worktree.path, output_dir: File.join(@artifacts_dir, "before"))
+      before_result = run_smoke(smoke, directory: worktree.path, output_dir: File.join(@artifacts_dir, "before"))
 
       puts "5. Running smoke tests (after)..."
-      after_result = smoke.run(directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "after"))
+      after_result = run_smoke(smoke, directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "after"))
 
       [before_result, after_result]
     end
@@ -233,11 +233,11 @@ module RailsSmoke
       smoke = SmokeTest.new(@identifier)
 
       before_thread = Thread.new do
-        smoke.run(directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "before"),
+        run_smoke(smoke, directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "before"),
                   server_port: @config.before_port)
       end
       after_thread = Thread.new do
-        smoke.run(directory: worktree.path, output_dir: File.join(@artifacts_dir, "after"),
+        run_smoke(smoke, directory: worktree.path, output_dir: File.join(@artifacts_dir, "after"),
                   server_port: @config.after_port)
       end
 
@@ -270,12 +270,20 @@ module RailsSmoke
     def run_without_servers(worktree)
       puts "3. Running smoke tests (before)..."
       smoke = SmokeTest.new(@identifier)
-      before_result = smoke.run(directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "before"))
+      before_result = run_smoke(smoke, directory: Dir.pwd, output_dir: File.join(@artifacts_dir, "before"))
 
       puts "4. Running smoke tests (after)..."
-      after_result = smoke.run(directory: worktree.path, output_dir: File.join(@artifacts_dir, "after"))
+      after_result = run_smoke(smoke, directory: worktree.path, output_dir: File.join(@artifacts_dir, "after"))
 
       [before_result, after_result]
+    end
+
+    def run_smoke(smoke, directory:, output_dir:, server_port: nil)
+      if @config.test_command
+        smoke.run_command(command: @config.test_command, directory: directory, output_dir: output_dir)
+      else
+        smoke.run(directory: directory, output_dir: output_dir, server_port: server_port)
+      end
     end
 
     def setup_dirs

@@ -89,6 +89,37 @@ class RailsSmoke::TestSmokeTest < Minitest::Test
     assert_equal "logged", File.read(File.join(output_dir, "smoke", "test.log"))
   end
 
+  def test_run_command_executes_shell_command
+    output_dir = File.join(@tmpdir, "output")
+    smoke = RailsSmoke::SmokeTest.new("myapp")
+    result = smoke.run_command(command: 'echo "hello world"', directory: @tmpdir, output_dir: output_dir)
+
+    assert result.success
+    assert_match(/hello world/, result.stdout)
+    assert_kind_of Float, result.elapsed
+  end
+
+  def test_run_command_writes_artifact_files
+    output_dir = File.join(@tmpdir, "output")
+    smoke = RailsSmoke::SmokeTest.new("myapp")
+    smoke.run_command(command: 'echo "out"; echo "err" >&2', directory: @tmpdir, output_dir: output_dir)
+
+    assert File.exist?(File.join(output_dir, "stdout.log"))
+    assert File.exist?(File.join(output_dir, "stderr.log"))
+    assert File.exist?(File.join(output_dir, "timing.txt"))
+    assert_match(/out/, File.read(File.join(output_dir, "stdout.log")))
+    assert_match(/err/, File.read(File.join(output_dir, "stderr.log")))
+    assert_match(/\d+\.\d+s/, File.read(File.join(output_dir, "timing.txt")))
+  end
+
+  def test_run_command_returns_failure_for_failing_command
+    output_dir = File.join(@tmpdir, "output")
+    smoke = RailsSmoke::SmokeTest.new("myapp")
+    result = smoke.run_command(command: "exit 1", directory: @tmpdir, output_dir: output_dir)
+
+    refute result.success
+  end
+
   def test_runtime_config_omits_server_port_when_nil
     FileUtils.mkdir_p("test/smoke")
     File.write("test/smoke/myapp.rb", <<~'RUBY')

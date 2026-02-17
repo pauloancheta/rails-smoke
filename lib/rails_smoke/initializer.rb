@@ -44,6 +44,9 @@ module RailsSmoke
 
       # Rails environment for servers
       # rails_env: test
+
+      # Use an existing test command instead of manual smoke tests
+      # test_command: "bundle exec rspec"
     YAML
 
     def initialize(project_root: Dir.pwd)
